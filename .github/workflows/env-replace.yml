@@ -1,4 +1,4 @@
-name: Replace Database Placeholders
+name: Replace/Revert Database Placeholders
 
 permissions:
   contents: write
@@ -6,6 +6,7 @@ permissions:
 on:
   push:
     branches:
+      - main
       - dev
       - qat
       - prd
@@ -18,28 +19,34 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Replace placeholders dynamically
+      - name: Process placeholders
         run: |
-          # Detect branch
-          BRANCH="${GITHUB_REF_NAME^^}"   # makes it UPPERCASE (dev -> DEV)
-          
-          echo "Running replacement for branch: $BRANCH"
+          BRANCH="${GITHUB_REF_NAME^^}"   # uppercase branch name (dev -> DEV)
 
-          # Replace all placeholders of the form {DATABASE_XYZ}
-          find . -type f -name "*.sql" | while read file; do
-            # Find all unique placeholders in file
-            for placeholder in $(grep -o "{DATABASE_[A-Z0-9_]\+}" "$file" | sort -u); do
-              base=$(echo $placeholder | sed 's/[{}]//g')   # DATABASE_XYZ
-              dbname=$(echo $base | sed "s/DATABASE_/${BRANCH}_/")  # DEV_XYZ / QAT_XYZ / PRD_XYZ
-              echo "Replacing $placeholder -> $dbname in $file"
-              sed -i "s/$placeholder/$dbname/g" "$file"
+          if [[ "$BRANCH" == "MAIN" ]]; then
+            echo "🔄 Reverting databases back to placeholders for main branch"
+            find . -type f -name "*.sql" | while read file; do
+              # Look for DEV_*/QAT_*/PRD_* patterns and revert
+              sed -i "s/DEV_\([A-Z0-9_]\+\)/{DATABASE_\1}/g" "$file"
+              sed -i "s/QAT_\([A-Z0-9_]\+\)/{DATABASE_\1}/g" "$file"
+              sed -i "s/PRD_\([A-Z0-9_]\+\)/{DATABASE_\1}/g" "$file"
             done
-          done
+          else
+            echo "🔄 Replacing placeholders with $BRANCH_ prefixes"
+            find . -type f -name "*.sql" | while read file; do
+              for placeholder in $(grep -o "{DATABASE_[A-Z0-9_]\+}" "$file" | sort -u); do
+                base=$(echo $placeholder | sed 's/[{}]//g')   # DATABASE_XYZ
+                dbname=$(echo $base | sed "s/DATABASE_/${BRANCH}_/")  # DEV_XYZ / QAT_XYZ / PRD_XYZ
+                echo "Replacing $placeholder -> $dbname in $file"
+                sed -i "s/$placeholder/$dbname/g" "$file"
+              done
+            done
+          fi
 
       - name: Commit changes back
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "Auto-replaced DB placeholders for ${GITHUB_REF_NAME}" || echo "No changes"
+          git commit -m "Auto-processed DB placeholders for ${GITHUB_REF_NAME}" || echo "No changes"
           git push
