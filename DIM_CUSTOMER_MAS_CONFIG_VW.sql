@@ -89,4 +89,4 @@ create or replace view {DATABASE_PRESENTATION}.RESIADDRESS.DIM_CUSTOMER_MAS_CONF
 	EXCEPTION_DESCRIPTION
     from DEV_reference.ods.DIM_CUSTOMER_MAS_CONFIG
       --from DEV_presentation.resiaddress.DIM_CUSTOMER_MAS_CONFIG_VW_MTNC_DEV
-  );
+  )
